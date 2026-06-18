@@ -152,3 +152,51 @@ describe('ElevenLabsProvider.generateAudio', () => {
     await expect(provider.generateAudio('hello')).rejects.toBeInstanceOf(TTSError);
   });
 });
+
+describe('GeminiProvider.generateJSON', () => {
+  const realFetch = global.fetch;
+
+  function mockGeminiOk(text: string): jest.Mock {
+    const fn = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ candidates: [{ content: { parts: [{ text }] } }] }),
+    });
+    (global as unknown as { fetch: unknown }).fetch = fn;
+    return fn;
+  }
+
+  afterEach(() => {
+    (global as unknown as { fetch: unknown }).fetch = realFetch;
+    jest.clearAllMocks();
+  });
+
+  it('sends the API key via the x-goog-api-key header, not the URL', async () => {
+    const fetchMock = mockGeminiOk('{"ok":true}');
+    const provider = new GeminiProvider('gem-secret');
+    await provider.generateJSON('system', 'user');
+
+    const calledUrl = fetchMock.mock.calls[0][0] as string;
+    const init = fetchMock.mock.calls[0][1] as { headers: Record<string, string> };
+    expect(calledUrl).not.toContain('gem-secret');
+    expect(calledUrl).not.toContain('key=');
+    expect(init.headers['x-goog-api-key']).toBe('gem-secret');
+  });
+
+  it('returns the JSON text content from the response', async () => {
+    mockGeminiOk('{"foo":1}');
+    const provider = new GeminiProvider('gem-secret');
+    await expect(provider.generateJSON('system', 'user')).resolves.toBe('{"foo":1}');
+  });
+
+  it('throws LLMError on a non-ok response', async () => {
+    const fn = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      text: async () => 'boom',
+    });
+    (global as unknown as { fetch: unknown }).fetch = fn;
+
+    const provider = new GeminiProvider('gem-secret');
+    await expect(provider.generateJSON('system', 'user')).rejects.toBeInstanceOf(LLMError);
+  });
+});

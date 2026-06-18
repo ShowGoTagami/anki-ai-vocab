@@ -25,14 +25,18 @@ export class GeminiProvider implements LLMProvider {
   }
 
   async generateJSON(systemPrompt: string, userPrompt: string): Promise<string> {
+    // Send the API key via the x-goog-api-key header rather than a `?key=`
+    // query parameter so it does not leak into proxy / server access logs.
     const url =
-      `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent` +
-      `?key=${encodeURIComponent(this.apiKey)}`;
+      `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent`;
 
     try {
       const response = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': this.apiKey,
+        },
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: systemPrompt }] },
           contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
