@@ -54,5 +54,5 @@ async function testPolly(): Promise<void> {
 }
 
 if (require.main === module) {
-  testPolly();
+  void testPolly();
 }

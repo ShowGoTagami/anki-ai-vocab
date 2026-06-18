@@ -8,6 +8,10 @@ import {
   AnkiConnectionError
 } from '../types';
 
+// AnkiConnect runs locally, so requests should resolve quickly. Cap them so a
+// non-responsive Anki / AnkiConnect does not hang the CLI indefinitely.
+const REQUEST_TIMEOUT_MS = 15000;
+
 export class AnkiConnector {
   private url: string;
 
@@ -27,7 +31,9 @@ export class AnkiConnector {
     const request = this.createRequest(action, params);
 
     try {
-      const response: AxiosResponse<AnkiConnectResponse<T>> = await axios.post(this.url, request);
+      const response: AxiosResponse<AnkiConnectResponse<T>> = await axios.post(this.url, request, {
+        timeout: REQUEST_TIMEOUT_MS,
+      });
       const data = response.data;
 
       if (!data || typeof data !== 'object') {
