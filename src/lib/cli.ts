@@ -2,6 +2,7 @@ import * as readline from 'readline';
 import { AnkiConnector } from './ankiConnector';
 import { VocabularyFetcher } from './vocabularyFetcher';
 import { parseJapaneseMeanings, createAnkiFields } from './utils';
+import { getMissingLLMKeyMessage } from './providers';
 import { Config, ExpressionInfo, AnkiAudioFile, WordIdiom, SimilarExpression, Derivative } from '../types';
 
 export class InteractiveSession {
@@ -29,7 +30,7 @@ export class InteractiveSession {
     this.noAudio = noAudio;
     
     this.anki = new AnkiConnector(config.anki_host, config.anki_port);
-    this.fetcher = new VocabularyFetcher(config.openai_api_key);
+    this.fetcher = new VocabularyFetcher(config);
     
     this.rl = readline.createInterface({
       input: process.stdin,
@@ -58,8 +59,9 @@ export class InteractiveSession {
       console.log(`✓ Voice: '${this.voice}'`);
       console.log(`✓ Audio: ${this.noAudio ? 'Disabled' : 'Enabled'}`);
 
-      if (!this.config.openai_api_key) {
-        console.log('Error: OpenAI API key not found. Please set OPENAI_API_KEY environment variable or add it to config.');
+      const missingKeyMessage = getMissingLLMKeyMessage(this.config);
+      if (missingKeyMessage) {
+        console.log(missingKeyMessage);
         return;
       }
 

@@ -1,3 +1,7 @@
+// Provider selection types
+export type LLMProviderName = 'openai' | 'gemini';
+export type TTSProviderName = 'polly' | 'elevenlabs';
+
 // Configuration types
 export interface Config {
   deck_name: string;
@@ -5,6 +9,13 @@ export interface Config {
   openai_api_key: string;
   anki_host: string;
   anki_port: number;
+  // AI (text generation) provider
+  ai_provider: LLMProviderName;
+  gemini_api_key: string;
+  // TTS (audio generation) provider
+  tts_provider: TTSProviderName;
+  elevenlabs_api_key: string;
+  elevenlabs_voice_id?: string;
 }
 
 // AnkiConnect API types
@@ -103,6 +114,8 @@ export interface CliOptions {
   interactive?: boolean;
   csv?: string;
   batch?: string;
+  aiProvider?: LLMProviderName;
+  ttsProvider?: TTSProviderName;
 }
 
 // Batch processing types
@@ -135,5 +148,21 @@ export class OpenAIError extends Error {
 export class PollyError extends Error {
   constructor(message: string) {
     super(message);
+    this.name = 'PollyError';
+  }
+}
+
+// Provider-agnostic errors
+export class LLMError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'LLMError';
+  }
+}
+
+export class TTSError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TTSError';
   }
 }

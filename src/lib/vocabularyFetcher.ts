@@ -1,35 +1,42 @@
 import {
-  Engine,
-  OutputFormat,
-  PollyClient,
-  SynthesizeSpeechCommand,
-  VoiceId,
-} from "@aws-sdk/client-polly";
-import OpenAI from "openai";
-import {
   AudioGenerationOptions,
   AudioGenerationResult,
   ExampleAudio,
-  OpenAIError,
-  PollyError,
+  LLMError,
+  TTSError,
   ExpressionInfo,
-  Derivative,
+  Config,
 } from "../types";
+import {
+  createLLMProvider,
+  createTTSProvider,
+  LLMProvider,
+  TTSProvider,
+} from "./providers";
 
 export class VocabularyFetcher {
-  private openaiClient: OpenAI;
-  private pollyClient: PollyClient;
+  private config: Config;
+  private _llm?: LLMProvider;
+  private _tts?: TTSProvider;
 
-  constructor(apiKey: string) {
-    this.openaiClient = new OpenAI({ apiKey });
+  constructor(config: Config) {
+    this.config = config;
+  }
 
-    this.pollyClient = new PollyClient({
-      region: process.env.AWS_DEFAULT_REGION || "us-east-1",
-      credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
-      },
-    });
+  // Providers are created lazily so that, for example, `--no-audio` never
+  // requires a TTS API key, and a Gemini user never needs an OpenAI key.
+  private get llm(): LLMProvider {
+    if (!this._llm) {
+      this._llm = createLLMProvider(this.config);
+    }
+    return this._llm;
+  }
+
+  private get tts(): TTSProvider {
+    if (!this._tts) {
+      this._tts = createTTSProvider(this.config);
+    }
+    return this._tts;
   }
 
   async getExpressionInfo(expression: string): Promise<ExpressionInfo> {
@@ -70,28 +77,11 @@ export class VocabularyFetcher {
         Remember: Every item in english_meaning MUST begin with [noun], [verb], [adjective], [adverb], etc.
         `;
 
-    try {
-      const response = await this.openaiClient.chat.completions.create({
-        model: "gpt-4.1-mini",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a helpful language teacher providing vocabulary information in JSON format. Always include parts of speech in square brackets [noun], [verb], [adjective], etc. at the beginning of each English definition.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        temperature: 0.3,
-        response_format: { type: "json_object" },
-      });
+    const systemPrompt =
+      "You are a helpful language teacher providing vocabulary information in JSON format. Always include parts of speech in square brackets [noun], [verb], [adjective], etc. at the beginning of each English definition.";
 
-      const content = response.choices[0]?.message?.content;
-      if (!content) {
-        throw new OpenAIError("No content received from OpenAI");
-      }
+    try {
+      const content = await this.llm.generateJSON(systemPrompt, prompt);
 
       const data = JSON.parse(content) as ExpressionInfo;
 
@@ -104,12 +94,15 @@ export class VocabularyFetcher {
 
       return data;
     } catch (error) {
+      if (error instanceof LLMError) {
+        throw error;
+      }
       if (error instanceof Error) {
-        throw new OpenAIError(
-          `Error fetching expression information from OpenAI: ${error.message}`
+        throw new LLMError(
+          `Error fetching expression information: ${error.message}`
         );
       }
-      throw new OpenAIError(
+      throw new LLMError(
         "Unknown error occurred while fetching expression information"
       );
     }
@@ -151,28 +144,11 @@ export class VocabularyFetcher {
         - Only include content relevant to the specified Japanese meanings: ${japaneseMeaningsStr}
         `;
 
-    try {
-      const response = await this.openaiClient.chat.completions.create({
-        model: "gpt-4.1-mini",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a helpful language teacher providing vocabulary information in JSON format for specific meanings only. Always include parts of speech in square brackets [noun], [verb], [adjective], etc. at the beginning of each English definition. Only provide information relevant to the specified Japanese meanings.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        temperature: 0.3,
-        response_format: { type: "json_object" },
-      });
+    const systemPrompt =
+      "You are a helpful language teacher providing vocabulary information in JSON format for specific meanings only. Always include parts of speech in square brackets [noun], [verb], [adjective], etc. at the beginning of each English definition. Only provide information relevant to the specified Japanese meanings.";
 
-      const content = response.choices[0]?.message?.content;
-      if (!content) {
-        throw new OpenAIError("No content received from OpenAI");
-      }
+    try {
+      const content = await this.llm.generateJSON(systemPrompt, prompt);
 
       const data = JSON.parse(content) as ExpressionInfo;
 
@@ -191,12 +167,15 @@ export class VocabularyFetcher {
 
       return data;
     } catch (error) {
+      if (error instanceof LLMError) {
+        throw error;
+      }
       if (error instanceof Error) {
-        throw new OpenAIError(
-          `Error fetching expression information with specific meanings from OpenAI: ${error.message}`
+        throw new LLMError(
+          `Error fetching expression information with specific meanings: ${error.message}`
         );
       }
-      throw new OpenAIError(
+      throw new LLMError(
         "Unknown error occurred while fetching expression information"
       );
     }
@@ -260,55 +239,7 @@ export class VocabularyFetcher {
     text: string,
     options: AudioGenerationOptions = {}
   ): Promise<Buffer> {
-    const { voice = "Matthew", speed = 1.0 } = options;
-
-    try {
-      // Map speed to Polly's rate parameter (percentage)
-      // OpenAI: 0.25-4.0, Polly: 20%-200%
-      const pollyRate = Math.round(speed * 100);
-
-      // Wrap text in SSML for speed control
-      const ssmlText = `<speak><prosody rate="${pollyRate}%">${text}</prosody></speak>`;
-
-      const command = new SynthesizeSpeechCommand({
-        Text: ssmlText,
-        TextType: "ssml",
-        OutputFormat: OutputFormat.MP3,
-        VoiceId: voice as VoiceId,
-        Engine: Engine.NEURAL,
-      });
-
-      const response = await this.pollyClient.send(command);
-
-      if (!response.AudioStream) {
-        throw new PollyError("No audio stream received from Polly");
-      }
-
-      // Convert stream to buffer for Node.js environment
-      const chunks: Buffer[] = [];
-      const stream = response.AudioStream as NodeJS.ReadableStream;
-
-      return new Promise<Buffer>((resolve, reject) => {
-        stream.on("data", (chunk: Buffer) => {
-          chunks.push(chunk);
-        });
-
-        stream.on("end", () => {
-          resolve(Buffer.concat(chunks));
-        });
-
-        stream.on("error", (error) => {
-          reject(error);
-        });
-      });
-    } catch (error) {
-      if (error instanceof Error) {
-        throw new PollyError(
-          `Error generating audio with Polly: ${error.message}`
-        );
-      }
-      throw new PollyError("Unknown error occurred while generating audio");
-    }
+    return this.tts.generateAudio(text, options);
   }
 
   async generateAudioFiles(
@@ -361,12 +292,13 @@ export class VocabularyFetcher {
         exampleAudios,
       };
     } catch (error) {
-      if (error instanceof Error) {
-        throw new PollyError(`Error generating audio files: ${error.message}`);
+      if (error instanceof TTSError) {
+        throw error;
       }
-      throw new PollyError(
-        "Unknown error occurred while generating audio files"
-      );
+      if (error instanceof Error) {
+        throw new TTSError(`Error generating audio files: ${error.message}`);
+      }
+      throw new TTSError("Unknown error occurred while generating audio files");
     }
   }
 }
