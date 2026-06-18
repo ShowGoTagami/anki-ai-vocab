@@ -11,7 +11,14 @@
     "lint": "eslint src/**/*.ts",
     "clean": "rm -rf dist"
   },
-  "keywords": ["anki", "vocabulary", "ai", "typescript", "openai", "aws-polly"],
+  "keywords": [
+    "anki",
+    "vocabulary",
+    "ai",
+    "typescript",
+    "openai",
+    "aws-polly"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
@@ -23,6 +30,7 @@
     "openai": "^4.24.0"
   },
   "devDependencies": {
+    "@types/jest": "^29.5.14",
     "@types/node": "^20.10.0",
     "@typescript-eslint/eslint-plugin": "^6.13.0",
     "@typescript-eslint/parser": "^6.13.0",
