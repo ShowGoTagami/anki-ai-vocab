@@ -2,8 +2,8 @@
 
 import * as dotenv from 'dotenv';
 
-// Load .env file
-dotenv.config();
+// Load .env file (override stale shell env vars)
+dotenv.config({ override: true });
 
 console.log('Checking environment variables:');
 console.log(`OPENAI_API_KEY: ${process.env.OPENAI_API_KEY ? 'Set' : 'Not set'}`);
