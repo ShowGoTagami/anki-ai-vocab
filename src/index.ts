@@ -5,7 +5,7 @@ import * as dotenv from 'dotenv';
 import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
-const csv = require('csv-parser');
+import csv from 'csv-parser';
 import { AnkiConnector } from './lib/ankiConnector';
 import { VocabularyFetcher } from './lib/vocabularyFetcher';
 import { InteractiveSession } from './lib/cli';
@@ -20,7 +20,7 @@ dotenv.config();
 async function readCsvFile(filePath: string): Promise<CsvRow[]> {
   return new Promise((resolve, reject) => {
     const rows: CsvRow[] = [];
-    const stream = fs.createReadStream(filePath)
+    fs.createReadStream(filePath)
       .pipe(csv())
       .on('data', (row: any) => {
         if (row.expression?.trim()) {
@@ -321,8 +321,8 @@ async function main(): Promise<void> {
         // Extract expression from fields (try to get the front field)
         const fields = note.fields;
         let displayText: string | undefined;
-        
-        for (const [fieldName, fieldData] of Object.entries(fields)) {
+
+        for (const fieldData of Object.values(fields)) {
           if (fieldData?.value) {
             displayText = fieldData.value.length > 50 
               ? fieldData.value.substring(0, 50) + '...' 

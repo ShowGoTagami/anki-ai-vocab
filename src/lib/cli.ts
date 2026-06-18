@@ -92,7 +92,7 @@ export class InteractiveSession {
   }
 
   private async interactiveLoop(): Promise<void> {
-    while (true) {
+    for (;;) {
       try {
         const userInput = await this.prompt('\n> ');
         
@@ -158,8 +158,10 @@ export class InteractiveSession {
       return;
     }
 
-    // Regex to find the first Japanese character
-    const japaneseCharRegex = /[　-〿぀-ゟ゠-ヿ＀-ﾟ一-龯㐀-䶿]/;
+    // Regex to find the first Japanese character. The first range starts at the
+    // full-width space (U+3000), written as an escape to avoid an irregular
+    // whitespace literal in the source.
+    const japaneseCharRegex = /[\u3000-〿぀-ゟ゠-ヿ＀-ﾟ一-龯㐀-䶿]/;
     const match = argString.match(japaneseCharRegex);
 
     let expression: string;
@@ -290,8 +292,8 @@ export class InteractiveSession {
         // Extract expression from fields (try to get the front field)
         const fields = note.fields;
         let displayText: string | undefined;
-        
-        for (const [fieldName, fieldData] of Object.entries(fields)) {
+
+        for (const fieldData of Object.values(fields)) {
           if (fieldData?.value) {
             displayText = fieldData.value.length > 50 
               ? fieldData.value.substring(0, 50) + '...' 
