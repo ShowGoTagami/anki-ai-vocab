@@ -10,6 +10,7 @@ import { AnkiConnector } from './lib/ankiConnector';
 import { VocabularyFetcher } from './lib/vocabularyFetcher';
 import { InteractiveSession } from './lib/cli';
 import { loadConfig, parseJapaneseMeanings, createAnkiFields } from './lib/utils';
+import { getMissingLLMKeyMessage } from './lib/providers';
 import { CliOptions, ExpressionInfo, AnkiAudioFile, CsvRow, BatchProcessingResult } from './types';
 
 // Load environment variables from .env file
@@ -123,13 +124,14 @@ async function processBatchExpressions(
   deckName: string,
   modelName: string
 ): Promise<void> {
-  if (!config.openai_api_key) {
-    console.log('Error: OpenAI API key not found. Please set OPENAI_API_KEY environment variable or add it to config.');
+  const missingKeyMessage = getMissingLLMKeyMessage(config);
+  if (missingKeyMessage) {
+    console.log(missingKeyMessage);
     process.exit(1);
   }
 
   const anki = new AnkiConnector(config.anki_host, config.anki_port);
-  const fetcher = new VocabularyFetcher(config.openai_api_key);
+  const fetcher = new VocabularyFetcher(config);
 
   // Check if model exists
   const availableModels = await anki.getModelNames();
@@ -238,7 +240,9 @@ program
   .option('--deck <name>', 'Anki deck name (overrides config)')
   .option('--model <name>', 'Anki note model name (overrides config)')
   .option('--no-audio', 'Disable automatic audio generation')
-  .option('--voice <voice>', 'Amazon Polly voice (Joanna, Matthew, Amy, Brian, Mizuki, Takumi, etc.)', 'Matthew')
+  .option('--ai-provider <provider>', 'Text generation provider: openai or gemini (overrides config)')
+  .option('--tts-provider <provider>', 'Audio generation provider: polly or elevenlabs (overrides config)')
+  .option('--voice <voice>', 'TTS voice. Polly: Joanna, Matthew, Amy, Brian, Mizuki, Takumi, etc. ElevenLabs: a voice id', 'Matthew')
   .option('--japanese-meaning <meanings>', 'Specific Japanese meaning(s) for the expression (comma-separated for multiple meanings)')
   .option('--delete', 'Delete cards containing the expression instead of adding')
   .option('--config', 'Show configuration path')
@@ -258,6 +262,11 @@ async function main(): Promise<void> {
   }
 
   const config = loadConfig();
+  // Apply CLI provider overrides so every downstream path (single, batch,
+  // interactive) sees the selected providers.
+  if (options.aiProvider) config.ai_provider = options.aiProvider;
+  if (options.ttsProvider) config.tts_provider = options.ttsProvider;
+
   const deckName = options.deck || config.deck_name;
   const modelName = options.model || config.model_name;
 
@@ -348,8 +357,9 @@ async function main(): Promise<void> {
     }
 
     // Add mode (existing functionality)
-    if (!config.openai_api_key) {
-      console.log('Error: OpenAI API key not found. Please set OPENAI_API_KEY environment variable or add it to config.');
+    const missingKeyMessage = getMissingLLMKeyMessage(config);
+    if (missingKeyMessage) {
+      console.log(missingKeyMessage);
       process.exit(1);
     }
 
@@ -372,8 +382,8 @@ async function main(): Promise<void> {
     const fieldNames = await anki.getModelFieldNames(modelName);
     console.log(`\nUsing note type '${modelName}' with fields: ${fieldNames.join(', ')}`);
 
-    const fetcher = new VocabularyFetcher(config.openai_api_key);
-    
+    const fetcher = new VocabularyFetcher(config);
+
     // Check if specific Japanese meanings are provided
     let expressionInfo: ExpressionInfo;
     if (options.japaneseMeaning) {

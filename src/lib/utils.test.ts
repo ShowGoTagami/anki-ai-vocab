@@ -38,6 +38,11 @@ describe('loadConfig', () => {
     'OPENAI_API_KEY',
     'ANKI_HOST',
     'ANKI_PORT',
+    'AI_PROVIDER',
+    'GEMINI_API_KEY',
+    'TTS_PROVIDER',
+    'ELEVENLABS_API_KEY',
+    'ELEVENLABS_VOICE_ID',
   ];
 
   beforeEach(() => {
@@ -84,6 +89,43 @@ describe('loadConfig', () => {
     process.env.ANKI_PORT = '1234';
     expect(loadConfig().anki_port).toBe(1234);
     expect(typeof loadConfig().anki_port).toBe('number');
+  });
+
+  it('defaults to the openai / polly providers', () => {
+    const config = loadConfig();
+    expect(config).toMatchObject({
+      ai_provider: 'openai',
+      tts_provider: 'polly',
+      gemini_api_key: '',
+      elevenlabs_api_key: '',
+    });
+    expect(config.elevenlabs_voice_id).toBeUndefined();
+  });
+
+  it('selects gemini / elevenlabs providers and keys from env', () => {
+    process.env.AI_PROVIDER = 'gemini';
+    process.env.GEMINI_API_KEY = 'gem-test';
+    process.env.TTS_PROVIDER = 'elevenlabs';
+    process.env.ELEVENLABS_API_KEY = 'el-test';
+    process.env.ELEVENLABS_VOICE_ID = 'voice-123';
+
+    const config = loadConfig();
+    expect(config).toMatchObject({
+      ai_provider: 'gemini',
+      gemini_api_key: 'gem-test',
+      tts_provider: 'elevenlabs',
+      elevenlabs_api_key: 'el-test',
+      elevenlabs_voice_id: 'voice-123',
+    });
+  });
+
+  it('ignores unknown provider names and falls back to defaults', () => {
+    process.env.AI_PROVIDER = 'bogus';
+    process.env.TTS_PROVIDER = 'nonsense';
+
+    const config = loadConfig();
+    expect(config.ai_provider).toBe('openai');
+    expect(config.tts_provider).toBe('polly');
   });
 });
 

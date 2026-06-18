@@ -2,6 +2,7 @@
 
 import * as dotenv from 'dotenv';
 import { VocabularyFetcher } from '../lib/vocabularyFetcher';
+import { loadConfig } from '../lib/utils';
 
 // Load environment variables
 dotenv.config();
@@ -20,7 +21,9 @@ async function testPolly(): Promise<void> {
   }
 
   try {
-    const fetcher = new VocabularyFetcher(process.env.OPENAI_API_KEY);
+    // Force the Polly TTS provider for this debug test regardless of config.
+    const config = { ...loadConfig(), tts_provider: 'polly' as const };
+    const fetcher = new VocabularyFetcher(config);
     
     console.log('Testing basic text synthesis...');
     const audioBuffer = await fetcher.generateAudio('Hello, this is a test of AWS Polly text-to-speech.');

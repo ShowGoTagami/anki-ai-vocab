@@ -1,7 +1,15 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { Config, ExpressionInfo, AnkiAudioFile, WordIdiom, SimilarExpression, Derivative } from '../types';
+import { Config, ExpressionInfo, AnkiAudioFile, WordIdiom, SimilarExpression, Derivative, LLMProviderName, TTSProviderName } from '../types';
+
+function parseLLMProvider(value: string | undefined): LLMProviderName {
+  return value === 'gemini' ? 'gemini' : 'openai';
+}
+
+function parseTTSProvider(value: string | undefined): TTSProviderName {
+  return value === 'elevenlabs' ? 'elevenlabs' : 'polly';
+}
 
 export function parseJapaneseMeanings(meaningsStr: string): string[] {
   if (!meaningsStr?.trim()) {
@@ -23,7 +31,14 @@ export function loadConfig(): Config {
     model_name: process.env.MODEL_NAME || 'Basic (and reversed card)',
     openai_api_key: process.env.OPENAI_API_KEY || '',
     anki_host: process.env.ANKI_HOST || 'localhost',
-    anki_port: parseInt(process.env.ANKI_PORT || '8765', 10)
+    anki_port: parseInt(process.env.ANKI_PORT || '8765', 10),
+    ai_provider: parseLLMProvider(process.env.AI_PROVIDER),
+    gemini_api_key: process.env.GEMINI_API_KEY || '',
+    tts_provider: parseTTSProvider(process.env.TTS_PROVIDER),
+    elevenlabs_api_key: process.env.ELEVENLABS_API_KEY || '',
+    ...(process.env.ELEVENLABS_VOICE_ID
+      ? { elevenlabs_voice_id: process.env.ELEVENLABS_VOICE_ID }
+      : {})
   };
 
   if (!fs.existsSync(configPath)) {
@@ -35,14 +50,20 @@ export function loadConfig(): Config {
     const fileConfigRaw = fs.readFileSync(configPath, 'utf8');
     const fileConfig = JSON.parse(fileConfigRaw) as Partial<Config>;
 
-    // Environment variables take precedence
-    const config: Config = { ...fileConfig } as Config;
-    
+    // Start from defaults (so new fields are always populated), then layer the
+    // config file, then let environment variables take precedence.
+    const config: Config = { ...defaultConfig, ...fileConfig };
+
     if (process.env.DECK_NAME) config.deck_name = process.env.DECK_NAME;
     if (process.env.MODEL_NAME) config.model_name = process.env.MODEL_NAME;
     if (process.env.OPENAI_API_KEY) config.openai_api_key = process.env.OPENAI_API_KEY;
     if (process.env.ANKI_HOST) config.anki_host = process.env.ANKI_HOST;
     if (process.env.ANKI_PORT) config.anki_port = parseInt(process.env.ANKI_PORT, 10);
+    if (process.env.AI_PROVIDER) config.ai_provider = parseLLMProvider(process.env.AI_PROVIDER);
+    if (process.env.GEMINI_API_KEY) config.gemini_api_key = process.env.GEMINI_API_KEY;
+    if (process.env.TTS_PROVIDER) config.tts_provider = parseTTSProvider(process.env.TTS_PROVIDER);
+    if (process.env.ELEVENLABS_API_KEY) config.elevenlabs_api_key = process.env.ELEVENLABS_API_KEY;
+    if (process.env.ELEVENLABS_VOICE_ID) config.elevenlabs_voice_id = process.env.ELEVENLABS_VOICE_ID;
 
     return config;
   } catch (error) {
