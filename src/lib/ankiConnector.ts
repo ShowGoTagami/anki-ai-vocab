@@ -1,3 +1,4 @@
+import * as http from 'http';
 import axios, { AxiosResponse } from 'axios';
 import {
   AnkiConnectRequest,
@@ -11,6 +12,12 @@ import {
 // AnkiConnect runs locally, so requests should resolve quickly. Cap them so a
 // non-responsive Anki / AnkiConnect does not hang the CLI indefinitely.
 const REQUEST_TIMEOUT_MS = 15000;
+
+// AnkiConnect closes the TCP connection after each response, so HTTP
+// keep-alive must be disabled. Otherwise the agent pools the socket and the
+// next request reuses an already-closed connection, failing with
+// "socket hang up" (ECONNRESET) on every call after the first.
+const httpAgent = new http.Agent({ keepAlive: false });
 
 export class AnkiConnector {
   private url: string;
@@ -33,6 +40,8 @@ export class AnkiConnector {
     try {
       const response: AxiosResponse<AnkiConnectResponse<T>> = await axios.post(this.url, request, {
         timeout: REQUEST_TIMEOUT_MS,
+        httpAgent,
+        headers: { Connection: 'close' },
       });
       const data = response.data;
 
