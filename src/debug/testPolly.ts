@@ -4,8 +4,8 @@ import * as dotenv from 'dotenv';
 import { VocabularyFetcher } from '../lib/vocabularyFetcher';
 import { loadConfig } from '../lib/utils';
 
-// Load environment variables
-dotenv.config();
+// Load environment variables (override stale shell env vars)
+dotenv.config({ override: true });
 
 async function testPolly(): Promise<void> {
   console.log('Testing AWS Polly TTS...');

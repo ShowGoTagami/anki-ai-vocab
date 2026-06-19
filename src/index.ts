@@ -13,8 +13,11 @@ import { loadConfig, parseJapaneseMeanings, createAnkiFields } from './lib/utils
 import { getMissingLLMKeyMessage } from './lib/providers';
 import { CliOptions, ExpressionInfo, AnkiAudioFile, CsvRow, BatchProcessingResult } from './types';
 
-// Load environment variables from .env file
-dotenv.config();
+// Load environment variables from .env file. `override: true` makes the
+// project's .env authoritative over any pre-existing (and possibly stale)
+// shell environment variables, which is the least surprising behavior for a
+// .env-configured CLI.
+dotenv.config({ override: true });
 
 // Helper functions for batch processing
 async function readCsvFile(filePath: string): Promise<CsvRow[]> {
